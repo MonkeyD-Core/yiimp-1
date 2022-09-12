@@ -1,12 +1,10 @@
 
 #include "stratum.h"
 
+bool kawpow_set_difficulty(YAAMP_CLIENT* client, double difficulty);
+
 double client_normalize_difficulty(double difficulty)
 {
-	if(difficulty < g_stratum_min_diff) difficulty = g_stratum_min_diff;
-	else if(difficulty < 1) difficulty = floor(difficulty*1000/2)/1000*2;
-	else if(difficulty > 1) difficulty = floor(difficulty/2)*2;
-	if(difficulty > g_stratum_max_diff) difficulty = g_stratum_max_diff;
 	return difficulty;
 }
 
@@ -38,37 +36,30 @@ void client_change_difficulty(YAAMP_CLIENT *client, double difficulty)
 //	debuglog("change diff to %f %f\n", difficulty, client->difficulty_actual);
 	if(difficulty == client->difficulty_actual) return;
 
-	client->difficulty_actual = difficulty;
-	client_send_difficulty(client, difficulty);
+	uint64_t user_target = diff_to_target(difficulty);
+	if(user_target >= YAAMP_MINDIFF && user_target <= YAAMP_MAXDIFF)
+	{
+		client->difficulty_actual = difficulty;
+		client_send_difficulty(client, difficulty);
+	}
 }
 
 void client_adjust_difficulty(YAAMP_CLIENT *client)
 {
-	if(client->difficulty_remote) {
-		client_change_difficulty(client, client->difficulty_remote);
-		return;
-	}
-
 	if(client->shares_per_minute > 100)
-		client_change_difficulty(client, client->difficulty_actual*4);
+		kawpow_set_difficulty(client, client->difficulty_actual*4);
 
 	else if(client->difficulty_fixed)
 		return;
 
-	else if(client->shares_per_minute > 75)
-		client_change_difficulty(client, client->difficulty_actual*3.5);
-
-	else if(client->shares_per_minute > 50)
-		client_change_difficulty(client, client->difficulty_actual*3);
-
 	else if(client->shares_per_minute > 25)
-		client_change_difficulty(client, client->difficulty_actual*2);
+		kawpow_set_difficulty(client, client->difficulty_actual*2);
 
 	else if(client->shares_per_minute > 20)
-		client_change_difficulty(client, client->difficulty_actual*1.5);
+		kawpow_set_difficulty(client, client->difficulty_actual*1.5);
 
 	else if(client->shares_per_minute <  5)
-		client_change_difficulty(client, client->difficulty_actual/2);
+		kawpow_set_difficulty(client, client->difficulty_actual/2);
 }
 
 int client_send_difficulty(YAAMP_CLIENT *client, double difficulty)
@@ -79,7 +70,7 @@ int client_send_difficulty(YAAMP_CLIENT *client, double difficulty)
 	if(difficulty >= 1)
 		client_call(client, "mining.set_difficulty", "[%.0f]", difficulty);
 	else
-		client_call(client, "mining.set_difficulty", "[%0.8f]", difficulty);
+		client_call(client, "mining.set_difficulty", "[%.3f]", difficulty);
 	return 0;
 }
 
@@ -100,3 +91,9 @@ void client_initialize_difficulty(YAAMP_CLIENT *client)
 	}
 
 }
+
+
+
+
+
+

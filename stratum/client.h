@@ -31,8 +31,8 @@ struct YAAMP_CLIENT_ALGO
 
 #define YAAMP_JOB_MAXHISTORY	16
 
-#define MIN_ADDRESS_LEN 3 /* BTC len can be as few as 26 chars, but gen. 33 or 34 */
-#define MAX_ADDRESS_LEN 98 /* BITC */
+#define MIN_ADDRESS_LEN 30 /* BTC len can be as few as 26 chars, but gen. 33 or 34 */
+#define MAX_ADDRESS_LEN 35 /* DCR */
 
 class YAAMP_CLIENT: public YAAMP_OBJECT
 {
@@ -91,6 +91,8 @@ public:
 	int jobid_next;
 	int jobid_sent;
 	int jobid_locked;
+
+	uint256 last_target;
 
 	YAAMP_CLIENT_ALGO algos_subscribed[YAAMP_MAXALGOS];
 	int job_history[YAAMP_JOB_MAXHISTORY];

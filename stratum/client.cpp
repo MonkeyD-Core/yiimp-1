@@ -48,12 +48,12 @@ bool client_subscribe(YAAMP_CLIENT *client, json_value *json_params)
 		if (json_params->u.array.values[0]->u.string.ptr)
 			strncpy(client->version, json_params->u.array.values[0]->u.string.ptr, 1023);
 
-		if (strstr(client->version, "NiceHash"))
-      client->difficulty_actual = g_stratum_nicehash_difficulty;
+		if(strstr(client->version, "NiceHash"))
+			client->difficulty_actual = g_stratum_nicehash_difficulty;
 
 		if(strstr(client->version, "proxy") || strstr(client->version, "/3."))
-      client->reconnectable = false;
-
+            client->reconnectable = false;
+		
 		if(strstr(client->version, "ccminer")) client->stats = true;
 		if(strstr(client->version, "cpuminer-multi")) client->stats = true;
 		if(strstr(client->version, "cpuminer-opt")) client->stats = true;
@@ -232,6 +232,11 @@ bool client_authorize(YAAMP_CLIENT *client, json_value *json_params)
 		}
 	}
 
+	if (!is_base58(client->username)) {
+		clientlog(client, "bad mining address %s", client->username);
+		return false;
+	}
+
 	bool reset = client_initialize_multialgo(client);
 	if(reset) return false;
 
@@ -257,6 +262,19 @@ bool client_authorize(YAAMP_CLIENT *client, json_value *json_params)
 
 		db_add_worker(g_db, client);
 		CommonUnlock(&g_db_mutex);
+	}
+
+	// when auto exchange is disabled, only authorize good wallet address...
+	if (!g_autoexchange && !client_validate_user_address(client)) {
+
+		clientlog(client, "bad mining address %s", client->username);
+		client_send_result(client, "false");
+
+		CommonLock(&g_db_mutex);
+		db_clear_worker(g_db, client);
+		CommonUnlock(&g_db_mutex);
+
+		return false;
 	}
 
 	client_send_result(client, "true");
@@ -510,7 +528,7 @@ void *client_thread(void *p)
 	}
 	memset(client, 0, sizeof(YAAMP_CLIENT));
 
-	client->reconnectable = true;
+	client->reconnectable = false;
 	client->speed = 1;
 	client->created = time(NULL);
 	client->last_best = time(NULL);
@@ -575,17 +593,18 @@ void *client_thread(void *p)
 		}
 
 		bool b = false;
+
 		if(!strcmp(method, "mining.subscribe"))
 			b = client_subscribe(client, json_params);
 
 		else if(!strcmp(method, "mining.authorize"))
-			b = client_authorize(client, json_params);
+			b = kawpow_authorize(client, json_params);
 
 		else if(!strcmp(method, "mining.ping"))
 			b = client_send_result(client, "\"pong\"");
 
 		else if(!strcmp(method, "mining.submit"))
-			b = client_submit(client, json_params);
+			b = kawpow_submit(client, json_params);
 
 		else if(!strcmp(method, "mining.suggest_difficulty"))
 			b = client_suggest_difficulty(client, json_params);
@@ -656,3 +675,4 @@ void *client_thread(void *p)
 
 	pthread_exit(NULL);
 }
+
